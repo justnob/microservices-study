@@ -34,7 +34,7 @@ public class ProductController {
         log.debug("Entering product create api.......");
         ServerResponse productResponse = productService.createProduct(createProductRequestDto);
 
-        return new ResponseEntity<>(productResponse, HttpStatus.CREATED);
+        return new ResponseEntity<>(productResponse, HttpStatus.OK);
     }
 
     /***

@@ -30,7 +30,7 @@ public class OrderController {
     public ResponseEntity<?> placeOrder(@RequestBody OrderRequestDto orderRequestDto){
         log.debug("Entering order placing api.......");
         ServerResponse orderPlacedResponse = orderService.placeOrder(orderRequestDto);
-        return new ResponseEntity<>(orderPlacedResponse, HttpStatus.CREATED);
+        return new ResponseEntity<>(orderPlacedResponse, HttpStatus.OK);
     }
 
     /***

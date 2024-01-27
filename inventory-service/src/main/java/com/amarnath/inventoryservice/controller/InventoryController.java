@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @Slf4j
 @RequestMapping("/v1/api/inventory")
@@ -24,8 +26,8 @@ public class InventoryController {
      * @param skuCode
      * RETURN the boolean value for the product is available in the database or not.
      */
-    @GetMapping("/{sku-code}")
-    public ResponseEntity<?> isInStock(@PathVariable("sku-code") String skuCode){
+    @GetMapping()
+    public ResponseEntity<?> isInStock(@RequestParam List<String> skuCode){
         log.debug("Entering product stock check api.......");
         ServerResponse inStock = inventoryService.isInStock(skuCode);
         return new ResponseEntity<>(inStock, HttpStatus.OK);
@@ -40,7 +42,7 @@ public class InventoryController {
     public ResponseEntity<?> createProductStock(@RequestBody ProductCreateRequest productCreateRequest){
         log.debug("Entering product stock creation api.......");
         ServerResponse productStock = inventoryService.createProductStock(productCreateRequest);
-        return new ResponseEntity<>(productStock, HttpStatus.CREATED);
+        return new ResponseEntity<>(productStock, HttpStatus.OK);
     }
 
     /***

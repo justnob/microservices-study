@@ -3,6 +3,7 @@ package com.amarnath.inventoryservice.service.impl;
 import com.amarnath.inventoryservice.dto.requestDto.ProductCreateRequest;
 import com.amarnath.inventoryservice.dto.requestDto.ProductDeleteRequest;
 import com.amarnath.inventoryservice.dto.requestDto.ProductUpdateRequest;
+import com.amarnath.inventoryservice.dto.responseDto.InventoryStockResponse;
 import com.amarnath.inventoryservice.dto.responseDto.ServerResponse;
 import com.amarnath.inventoryservice.module.Inventory;
 import com.amarnath.inventoryservice.repository.InventoryRepository;
@@ -12,7 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -22,16 +26,24 @@ public class InventoryServiceImpl implements InventoryService {
     private InventoryRepository inventoryRepository;
 
     @Override
-    public ServerResponse isInStock(String skuCode) {
+    public ServerResponse isInStock(List<String> skuCode) {
 
-        Optional<Inventory> product = inventoryRepository.findBySkuCode(skuCode);
+        Optional<List<Inventory>> product = inventoryRepository.findBySkuCodeIn(skuCode);
 
         if (product.isPresent()){
             log.debug("Product is in stock: {}", JsonUtil.toString(product.get()));
+            List<InventoryStockResponse> listOfStockProduct = product.get().stream().map(inventoryData ->
+                    InventoryStockResponse.builder()
+                            .skuCode(inventoryData.getSkuCode())
+                            .isPresent(inventoryData.getQuantity() > 0)
+                            .build()
+            ).toList();
+            log.debug("Is In Stock :: {}", JsonUtil.toString(listOfStockProduct));
             return ServerResponse.builder()
                     .code(1)
                     .success(true)
                     .message("Product is available!")
+                    .data(listOfStockProduct)
                     .build();
         }else {
             log.debug("Product is not in stock!");

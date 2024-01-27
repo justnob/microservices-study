@@ -1,7 +1,10 @@
 package com.amarnath.orderservice.service.impl;
 
+import com.amarnath.orderservice.Constants.OrderConstants;
+import com.amarnath.orderservice.dto.requestDto.OrderLineItemDto;
 import com.amarnath.orderservice.dto.requestDto.OrderListRequestDto;
 import com.amarnath.orderservice.dto.requestDto.OrderRequestDto;
+import com.amarnath.orderservice.dto.responseDto.InventoryStockResponse;
 import com.amarnath.orderservice.dto.responseDto.OrderResponseDto;
 import com.amarnath.orderservice.dto.responseDto.ServerResponse;
 import com.amarnath.orderservice.mapper.OrderMapper;
@@ -9,15 +12,15 @@ import com.amarnath.orderservice.model.Orders;
 import com.amarnath.orderservice.model.OrderLineItem;
 import com.amarnath.orderservice.repository.OrderLineItemRepository;
 import com.amarnath.orderservice.repository.OrderRepository;
+import com.amarnath.orderservice.restTemplate.RestTemplates;
 import com.amarnath.orderservice.service.OrderService;
 import com.amarnath.orderservice.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -27,34 +30,67 @@ public class OrderServiceImpl implements OrderService {
     private OrderRepository orderRepository;
     @Autowired
     private OrderLineItemRepository orderLineItemRepository;
+    @Autowired
+    private RestTemplates restTemplates;
 
     @Override
     public ServerResponse placeOrder(OrderRequestDto orderRequestDto) {
 
-        Orders orders = Orders.builder()
-                .orderNumber(UUID.randomUUID().toString())
-                .build();
-        Orders savedOrders = orderRepository.save(orders);
-        log.debug("Order saved in the database");
+        List<String> skuCodesList = orderRequestDto.getOrderLineItemDto().stream().map(OrderLineItemDto::getSkuCode).toList();
 
-        List<OrderLineItem> listOfOrder = orderRequestDto.getOrderLineItemDto().stream().map(OrderMapper::mapToOrderLineItem).toList();
+        ServerResponse orderServiceResponse = restTemplates.doGetRequest(OrderConstants.ORDER_CHECK_SERVICE, skuCodesList);
+        if (orderServiceResponse.isSuccess()){
+            try {
+                List<InventoryStockResponse> inventoryStockResponse = (List<InventoryStockResponse>) orderServiceResponse.getData();
+                boolean isInStock = inventoryStockResponse.stream().allMatch(InventoryStockResponse::isPresent);
 
-        listOfOrder.forEach(listOfOrders ->{
-            listOfOrders.setOrders(savedOrders);
-            orderLineItemRepository.save(listOfOrders);
-            log.debug("Order list saved in the database");
-        });
+                if (isInStock) {
+                    Orders orders = Orders.builder()
+                            .orderNumber(UUID.randomUUID().toString())
+                            .build();
+                    Orders savedOrders = orderRepository.save(orders);
+                    log.debug("Order saved in the database");
 
-        List<OrderLineItem> allOrderListByOrderId = orderLineItemRepository.getByOrdersId(savedOrders.getId());
+                    List<OrderLineItem> listOfOrder = orderRequestDto.getOrderLineItemDto().stream().map(OrderMapper::mapToOrderLineItem).toList();
 
-        OrderResponseDto orderResponseDto = OrderMapper.mapToOrderResponseDto(savedOrders, allOrderListByOrderId);
-        log.debug("Order save in DB: {}", JsonUtil.toString(orderResponseDto));
-        return ServerResponse.builder()
-                .code(1)
-                .message("Order Placed Successfully!")
-                .success(true)
-                .data(orderResponseDto)
-                .build();
+                    listOfOrder.forEach(listOfOrders -> {
+                        listOfOrders.setOrders(savedOrders);
+                        orderLineItemRepository.save(listOfOrders);
+                        log.debug("Order list saved in the database");
+                    });
+
+                    List<OrderLineItem> allOrderListByOrderId = orderLineItemRepository.getByOrdersId(savedOrders.getId());
+
+                    OrderResponseDto orderResponseDto = OrderMapper.mapToOrderResponseDto(savedOrders, allOrderListByOrderId);
+                    log.debug("Order save in DB: {}", JsonUtil.toString(orderResponseDto));
+                    return ServerResponse.builder()
+                            .code(1)
+                            .message("Order Placed Successfully!")
+                            .success(true)
+                            .data(orderResponseDto)
+                            .build();
+                } else {
+                    return ServerResponse.builder()
+                            .success(false)
+                            .code(2)
+                            .message("The items you have ordered are not in stock please try decreasing the amount of items or products!")
+                            .build();
+                }
+            } catch (Exception e) {
+                log.error("Error occurred while parsing the response", e);
+                return ServerResponse.builder()
+                        .success(false)
+                        .code(2)
+                        .message("Error occurred while making the request")
+                        .build();
+            }
+        }else{
+            return ServerResponse.builder()
+                    .success(false)
+                    .code(2)
+                    .message(orderServiceResponse.getMessage())
+                    .build();
+        }
     }
 
     @Override
